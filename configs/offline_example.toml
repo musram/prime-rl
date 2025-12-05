@@ -19,6 +19,17 @@ beta = 0.1  # DPO beta parameter
 [model]
 name = "gpt2"
 trust_remote_code = false
+# reference_model_name = "gpt2"  # Optional: separate reference model for DPO
+
+[training]
+# Multi-device training (requires multiple GPUs/TPUs)
+use_pmap = false
+# Mixed precision: "float32", "float16", or "bfloat16"
+dtype = "float32"
+# Gradient accumulation steps (effective batch size = batch_size * gradient_accumulation_steps)
+gradient_accumulation_steps = 1
+# Optional: validation dataset path
+# validation_dataset_path = "data/val_traces.jsonl"
 
 [output]
 output_dir = "./output"

@@ -5,7 +5,7 @@ This module defines the unified TOML/YAML configuration schema that selects back
 mode, algorithm, and dataset/environment as specified in the PRD (§3.1).
 """
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, Dict, Any
 from pathlib import Path
 from pydantic import BaseModel, Field
 
@@ -36,18 +36,21 @@ class AlgorithmConfig(BaseModel):
     entropy_coef: Optional[float] = Field(default=None, description="PPO entropy coefficient")
     # Additional algorithm config (for extensibility)
     config: Optional[Dict[str, Any]] = Field(default=None, description="Additional algorithm-specific config")
-    # PPO-specific config
-    clip_epsilon: Optional[float] = Field(default=None, description="PPO clip epsilon")
-    value_coef: Optional[float] = Field(default=None, description="PPO value coefficient")
-    entropy_coef: Optional[float] = Field(default=None, description="PPO entropy coefficient")
-    # Additional algorithm config (for extensibility)
-    config: Optional[Dict[str, Any]] = Field(default=None, description="Additional algorithm-specific config")
 
 
 class ModelConfig(BaseModel):
     """Model configuration."""
     name: str = Field(..., description="Model name (e.g., HuggingFace model ID)")
     trust_remote_code: bool = Field(default=False, description="Trust remote code")
+    reference_model_name: Optional[str] = Field(default=None, description="Separate reference model name (for DPO)")
+
+
+class TrainingConfig(BaseModel):
+    """Training configuration for JAX backend."""
+    use_pmap: bool = Field(default=False, description="Use pmap for multi-device training")
+    dtype: Literal["float32", "float16", "bfloat16"] = Field(default="float32", description="Training dtype")
+    gradient_accumulation_steps: int = Field(default=1, ge=1, description="Gradient accumulation steps")
+    validation_dataset_path: Optional[Path] = Field(default=None, description="Path to validation dataset (JSONL)")
 
 
 class OutputConfig(BaseModel):
@@ -69,6 +72,7 @@ class UnifiedConfig(BaseModel):
     dataset: Optional[DatasetConfig] = Field(default=None, description="Dataset config (for offline mode)")
     algorithm: AlgorithmConfig = Field(default_factory=AlgorithmConfig)
     model: Optional[ModelConfig] = Field(default=None, description="Model config")
+    training: Optional[TrainingConfig] = Field(default=None, description="Training config (for JAX backend)")
     output: Optional[OutputConfig] = Field(default=None, description="Output configuration")
     
     # Convenience properties for backward compatibility

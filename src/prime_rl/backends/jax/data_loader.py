@@ -117,8 +117,10 @@ class JaxDataLoader:
         """
         Create preference pairs from rollouts for DPO training.
         
-        For now, creates pairs by comparing rewards. Traces with higher rewards
-        are treated as "chosen" and lower rewards as "rejected".
+        Strategy:
+        1. If preference_group_id is available in metadata, group rollouts by group_id
+           and pair within groups (e.g., for explicit preference annotations)
+        2. Otherwise, fall back to reward-based pairing (higher reward = chosen)
         
         Args:
             rollouts: List of UniversalRollout objects
@@ -132,28 +134,82 @@ class JaxDataLoader:
             # Need at least 2 rollouts to create a pair
             return pairs
         
-        # Simple strategy: pair rollouts by reward
-        # Sort by reward and pair high with low
-        sorted_rollouts = sorted(rollouts, key=lambda r: r.rewards[0] if r.rewards and len(r.rewards) > 0 else 0.0, reverse=True)
+        # Check if any rollout has preference_group_id
+        has_group_ids = any(
+            r.metadata and "preference_group_id" in r.metadata 
+            for r in rollouts
+        )
         
-        # Create pairs: high reward (chosen) vs low reward (rejected)
-        for i in range(0, len(sorted_rollouts) - 1, 2):
-            if i + 1 < len(sorted_rollouts):
-                chosen = sorted_rollouts[i]
-                rejected = sorted_rollouts[i + 1]
+        if has_group_ids:
+            # Group by preference_group_id
+            groups: Dict[str, List[UniversalRollout]] = {}
+            for rollout in rollouts:
+                group_id = rollout.metadata.get("preference_group_id") if rollout.metadata else None
+                if group_id:
+                    if group_id not in groups:
+                        groups[group_id] = []
+                    groups[group_id].append(rollout)
+            
+            # Create pairs within each group
+            for group_id, group_rollouts in groups.items():
+                if len(group_rollouts) < 2:
+                    continue
                 
-                # Get rewards (default to 0.0 if missing)
-                chosen_reward = chosen.rewards[0] if chosen.rewards and len(chosen.rewards) > 0 else 0.0
-                rejected_reward = rejected.rewards[0] if rejected.rewards and len(rejected.rewards) > 0 else 0.0
+                # Sort by reward within group (higher = chosen)
+                sorted_group = sorted(
+                    group_rollouts,
+                    key=lambda r: r.rewards[0] if r.rewards and len(r.rewards) > 0 else 0.0,
+                    reverse=True
+                )
                 
-                # Skip if rewards are equal (no preference)
-                if chosen_reward > rejected_reward:
-                    pairs.append({
-                        "chosen_prompt": chosen.prompts[0] if chosen.prompts else "",
-                        "chosen_completion": chosen.completions[0] if chosen.completions else "",
-                        "rejected_prompt": rejected.prompts[0] if rejected.prompts else "",
-                        "rejected_completion": rejected.completions[0] if rejected.completions else "",
-                    })
+                # Pair highest with lowest, second highest with second lowest, etc.
+                for i in range(len(sorted_group) // 2):
+                    chosen_idx = i
+                    rejected_idx = len(sorted_group) - 1 - i
+                    
+                    if chosen_idx >= rejected_idx:
+                        break
+                    
+                    chosen = sorted_group[chosen_idx]
+                    rejected = sorted_group[rejected_idx]
+                    
+                    chosen_reward = chosen.rewards[0] if chosen.rewards and len(chosen.rewards) > 0 else 0.0
+                    rejected_reward = rejected.rewards[0] if rejected.rewards and len(rejected.rewards) > 0 else 0.0
+                    
+                    # Skip if rewards are equal (no preference)
+                    if chosen_reward > rejected_reward:
+                        pairs.append({
+                            "chosen_prompt": chosen.prompts[0] if chosen.prompts else "",
+                            "chosen_completion": chosen.completions[0] if chosen.completions else "",
+                            "rejected_prompt": rejected.prompts[0] if rejected.prompts else "",
+                            "rejected_completion": rejected.completions[0] if rejected.completions else "",
+                        })
+        else:
+            # Fall back to reward-based pairing (original behavior)
+            sorted_rollouts = sorted(
+                rollouts,
+                key=lambda r: r.rewards[0] if r.rewards and len(r.rewards) > 0 else 0.0,
+                reverse=True
+            )
+            
+            # Create pairs: high reward (chosen) vs low reward (rejected)
+            for i in range(0, len(sorted_rollouts) - 1, 2):
+                if i + 1 < len(sorted_rollouts):
+                    chosen = sorted_rollouts[i]
+                    rejected = sorted_rollouts[i + 1]
+                    
+                    # Get rewards (default to 0.0 if missing)
+                    chosen_reward = chosen.rewards[0] if chosen.rewards and len(chosen.rewards) > 0 else 0.0
+                    rejected_reward = rejected.rewards[0] if rejected.rewards and len(rejected.rewards) > 0 else 0.0
+                    
+                    # Skip if rewards are equal (no preference)
+                    if chosen_reward > rejected_reward:
+                        pairs.append({
+                            "chosen_prompt": chosen.prompts[0] if chosen.prompts else "",
+                            "chosen_completion": chosen.completions[0] if chosen.completions else "",
+                            "rejected_prompt": rejected.prompts[0] if rejected.prompts else "",
+                            "rejected_completion": rejected.completions[0] if rejected.completions else "",
+                        })
         
         return pairs
 

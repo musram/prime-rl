@@ -73,6 +73,14 @@ def train_offline_jax(config: UnifiedConfig) -> None:
         "trust_remote_code": config.model.trust_remote_code,
     }
     
+    # Add reference model name if specified
+    if config.model.reference_model_name:
+        algorithm_config["reference_model_name"] = config.model.reference_model_name
+    
+    # Add dtype if specified in training config
+    if config.training and config.training.dtype:
+        algorithm_config["dtype"] = config.training.dtype
+    
     if config.algorithm.name == "dpo":
         algorithm = JaxDPO(algorithm_config)
     else:
@@ -87,6 +95,17 @@ def train_offline_jax(config: UnifiedConfig) -> None:
         shuffle=config.dataset.shuffle,
     )
     
+    # Load validation dataset if specified
+    validation_data_loader = None
+    if config.training and config.training.validation_dataset_path:
+        logger.info(f"Loading validation dataset from {config.training.validation_dataset_path}")
+        validation_data_loader = JaxDataLoader(
+            file_path=str(config.training.validation_dataset_path),
+            tokenizer=algorithm.tokenizer,
+            batch_size=config.dataset.batch_size,
+            shuffle=False,  # Don't shuffle validation data
+        )
+    
     # Initialize trainer
     trainer_config = {
         "max_steps": config.max_steps,
@@ -98,10 +117,17 @@ def train_offline_jax(config: UnifiedConfig) -> None:
         ),
     }
     
+    # Add training optimizations if specified
+    if config.training:
+        trainer_config["use_pmap"] = config.training.use_pmap
+        trainer_config["dtype"] = config.training.dtype
+        trainer_config["gradient_accumulation_steps"] = config.training.gradient_accumulation_steps
+    
     trainer = JaxTrainer(
         algorithm=algorithm,
         config=trainer_config,
         data_loader=data_loader,
+        validation_data_loader=validation_data_loader,
     )
     
     # Run training loop

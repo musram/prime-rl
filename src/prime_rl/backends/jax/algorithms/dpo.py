@@ -73,6 +73,8 @@ class JaxDPO(OfflineRLAlgorithm):
         self.learning_rate = config.get("learning_rate", 1e-5)
         self.model_name = config.get("model_name", "gpt2")  # Default to small model for testing
         self.trust_remote_code = config.get("trust_remote_code", False)
+        self.reference_model_name = config.get("reference_model_name", None)  # Optional separate reference model
+        self.dtype = config.get("dtype", jnp.float32)  # Training dtype
         
         # Initialize tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -101,13 +103,20 @@ class JaxDPO(OfflineRLAlgorithm):
         # Use model_name from config if provided, otherwise use instance default
         model_name = config.get("model_name", self.model_name)
         trust_remote_code = config.get("trust_remote_code", self.trust_remote_code)
+        reference_model_name = config.get("reference_model_name", self.reference_model_name)
+        dtype = config.get("dtype", self.dtype)
         
-        # Load model
+        # Convert dtype string to JAX dtype if needed
+        if isinstance(dtype, str):
+            from prime_rl.backends.jax.utils import get_dtype
+            dtype = get_dtype(dtype)
+        
+        # Load policy model
         try:
             model = FlaxAutoModelForCausalLM.from_pretrained(
                 model_name,
                 trust_remote_code=trust_remote_code,
-                dtype=jnp.float32,
+                dtype=dtype,
             )
         except Exception as e:
             # Fallback to GPT2 if model loading fails
@@ -115,8 +124,46 @@ class JaxDPO(OfflineRLAlgorithm):
             warnings.warn(f"Failed to load {model_name}, falling back to gpt2: {e}")
             model = FlaxAutoModelForCausalLM.from_pretrained(
                 "gpt2",
-                dtype=jnp.float32,
+                dtype=dtype,
             )
+        
+        # Load reference model (separate or same as policy)
+        if reference_model_name and reference_model_name != model_name:
+            # Load separate reference model
+            try:
+                ref_model = FlaxAutoModelForCausalLM.from_pretrained(
+                    reference_model_name,
+                    trust_remote_code=trust_remote_code,
+                    dtype=dtype,
+                )
+                if hasattr(ref_model, "params"):
+                    ref_params = ref_model.params
+                else:
+                    # Fallback: initialize with dummy input
+                    dummy_input = jnp.ones((1, 10), dtype=jnp.int32)
+                    rng, init_rng = random.split(rng)
+                    variables = ref_model.init(init_rng, dummy_input, train=True)
+                    ref_params = variables["params"]
+            except Exception as e:
+                import warnings
+                warnings.warn(f"Failed to load reference model {reference_model_name}, using policy model: {e}")
+                # Fall back to using policy model as reference
+                if hasattr(model, "params"):
+                    ref_params = model.params
+                else:
+                    dummy_input = jnp.ones((1, 10), dtype=jnp.int32)
+                    rng, init_rng = random.split(rng)
+                    variables = model.init(init_rng, dummy_input, train=True)
+                    ref_params = variables["params"]
+        else:
+            # Use policy model as reference (default behavior)
+            if hasattr(model, "params"):
+                ref_params = model.params
+            else:
+                dummy_input = jnp.ones((1, 10), dtype=jnp.int32)
+                rng, init_rng = random.split(rng)
+                variables = model.init(init_rng, dummy_input, train=True)
+                ref_params = variables["params"]
         
         # Initialize optimizer
         optimizer = optax.adamw(
@@ -139,8 +186,8 @@ class JaxDPO(OfflineRLAlgorithm):
             variables = model.init(init_rng, dummy_input, train=True)
             params = variables["params"]
         
-        # Reference model params (same as policy initially, but frozen)
-        ref_params = flax.core.freeze(flax.core.unfreeze(params))
+        # Freeze reference model params (ensure they're never updated)
+        ref_params = flax.core.freeze(flax.core.unfreeze(ref_params))
         
         # Initialize optimizer state
         opt_state = optimizer.init(params)
