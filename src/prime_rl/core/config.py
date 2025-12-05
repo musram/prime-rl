@@ -30,6 +30,18 @@ class AlgorithmConfig(BaseModel):
     learning_rate: float = Field(default=1e-5, ge=0, description="Learning rate")
     # Algorithm-specific config can be extended
     beta: Optional[float] = Field(default=None, description="DPO beta parameter")
+    # PPO-specific config
+    clip_epsilon: Optional[float] = Field(default=None, description="PPO clip epsilon")
+    value_coef: Optional[float] = Field(default=None, description="PPO value coefficient")
+    entropy_coef: Optional[float] = Field(default=None, description="PPO entropy coefficient")
+    # Additional algorithm config (for extensibility)
+    config: Optional[Dict[str, Any]] = Field(default=None, description="Additional algorithm-specific config")
+    # PPO-specific config
+    clip_epsilon: Optional[float] = Field(default=None, description="PPO clip epsilon")
+    value_coef: Optional[float] = Field(default=None, description="PPO value coefficient")
+    entropy_coef: Optional[float] = Field(default=None, description="PPO entropy coefficient")
+    # Additional algorithm config (for extensibility)
+    config: Optional[Dict[str, Any]] = Field(default=None, description="Additional algorithm-specific config")
 
 
 class ModelConfig(BaseModel):

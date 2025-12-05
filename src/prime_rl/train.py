@@ -14,6 +14,7 @@ from prime_rl.core.config import UnifiedConfig
 from prime_rl.core.interaction_trace import load_traces_from_jsonl
 from prime_rl.backends.jax import JaxTrainer, JaxDPO
 from prime_rl.backends.jax.data_loader import JaxDataLoader
+from prime_rl.backends.torch import TorchTrainer, TorchPPO, TorchGRPO
 from prime_rl.utils.logger import setup_logger
 from loguru import logger
 
@@ -98,12 +99,50 @@ def train_offline_jax(config: UnifiedConfig) -> None:
 
 def train_online_torch(config: UnifiedConfig) -> None:
     """
-    Run online RL training with PyTorch backend (Phase 2 - not yet implemented).
+    Run online RL training with PyTorch backend.
     
     Args:
         config: Unified configuration
     """
-    raise NotImplementedError("Online PyTorch training will be implemented in Phase 2")
+    logger.info("Starting online RL training with PyTorch backend")
+    
+    # Validate configuration
+    if config.model is None:
+        raise ValueError("Model configuration required")
+    
+    # Initialize algorithm
+    algorithm_config = {
+        "learning_rate": config.algorithm.learning_rate,
+    }
+    
+    # Add algorithm-specific config
+    if config.algorithm.name == "ppo":
+        algorithm_config.update({
+            "clip_epsilon": config.algorithm.config.get("clip_epsilon", 0.2) if hasattr(config.algorithm, "config") else 0.2,
+            "value_coef": config.algorithm.config.get("value_coef", 0.5) if hasattr(config.algorithm, "config") else 0.5,
+            "entropy_coef": config.algorithm.config.get("entropy_coef", 0.01) if hasattr(config.algorithm, "config") else 0.01,
+        })
+        algorithm = TorchPPO(algorithm_config)
+    elif config.algorithm.name == "grpo":
+        algorithm = TorchGRPO(algorithm_config)
+    else:
+        raise ValueError(f"Unsupported algorithm for online mode: {config.algorithm.name}")
+    
+    # Initialize trainer
+    trainer_config = {
+        "max_steps": config.max_steps,
+        "checkpoint_every": config.checkpoint_every,
+        "eval_every": config.eval_every,
+        "output_dir": str(config.output_dir),
+        "model": config.model.dict() if config.model else None,
+    }
+    
+    trainer = TorchTrainer(algorithm=algorithm, config=trainer_config)
+    
+    # Run training loop
+    logger.info("Starting training loop")
+    trainer.run_training_loop()
+    logger.info("Training completed")
 
 
 def train(config_path: Path, mode: Optional[str] = None) -> None:
@@ -139,7 +178,7 @@ def train(config_path: Path, mode: Optional[str] = None) -> None:
     else:
         raise ValueError(
             f"Unsupported backend/mode combination: {config.backend.type}/{config.backend.mode}. "
-            f"Phase 1 supports: jax/offline"
+            f"Supported combinations: jax/offline, torch/online"
         )
 
 
