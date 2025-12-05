@@ -9,9 +9,13 @@ import argparse
 from pathlib import Path
 from typing import Optional
 import tomli
+import subprocess
 
 from prime_rl.core.config import UnifiedConfig
 from prime_rl.core.interaction_trace import load_traces_from_jsonl
+from prime_rl.core.training_run import TrainingRun
+from prime_rl.core.metadata_store import MetadataStore
+from prime_rl.core.eval_to_prod import EvalToProdTracker
 from prime_rl.backends.jax import JaxTrainer, JaxDPO
 from prime_rl.backends.jax.data_loader import JaxDataLoader
 from prime_rl.backends.torch import TorchTrainer, TorchPPO, TorchGRPO
@@ -118,12 +122,16 @@ def train_online_torch(config: UnifiedConfig) -> None:
     # Add algorithm-specific config
     if config.algorithm.name == "ppo":
         algorithm_config.update({
-            "clip_epsilon": config.algorithm.config.get("clip_epsilon", 0.2) if hasattr(config.algorithm, "config") else 0.2,
-            "value_coef": config.algorithm.config.get("value_coef", 0.5) if hasattr(config.algorithm, "config") else 0.5,
-            "entropy_coef": config.algorithm.config.get("entropy_coef", 0.01) if hasattr(config.algorithm, "config") else 0.01,
+            "clip_epsilon": config.algorithm.clip_epsilon or 0.2,
+            "value_coef": config.algorithm.value_coef or 0.5,
+            "entropy_coef": config.algorithm.entropy_coef or 0.01,
         })
+        if config.algorithm.config:
+            algorithm_config.update(config.algorithm.config)
         algorithm = TorchPPO(algorithm_config)
     elif config.algorithm.name == "grpo":
+        if config.algorithm.config:
+            algorithm_config.update(config.algorithm.config)
         algorithm = TorchGRPO(algorithm_config)
     else:
         raise ValueError(f"Unsupported algorithm for online mode: {config.algorithm.name}")
@@ -145,13 +153,25 @@ def train_online_torch(config: UnifiedConfig) -> None:
     logger.info("Training completed")
 
 
-def train(config_path: Path, mode: Optional[str] = None) -> None:
+def train(
+    config_path: Path,
+    mode: Optional[str] = None,
+    project_id: Optional[str] = None,
+    run_id: Optional[str] = None,
+    enable_tracking: bool = True,
+) -> Optional[TrainingRun]:
     """
     Main training function.
     
     Args:
         config_path: Path to TOML configuration file
         mode: Optional mode override ("offline" or "online")
+        project_id: Optional project identifier for multi-tenancy
+        run_id: Optional run identifier (creates new if not provided)
+        enable_tracking: Whether to enable eval-to-prod tracking
+        
+    Returns:
+        TrainingRun instance if tracking enabled, None otherwise
     """
     # Load configuration
     config = load_config(config_path)
@@ -170,16 +190,91 @@ def train(config_path: Path, mode: Optional[str] = None) -> None:
     logger.info(f"Algorithm: {config.algorithm.name}")
     logger.info(f"Output directory: {config.output_dir}")
     
-    # Route to appropriate backend/mode
-    if config.backend.type == "jax" and config.backend.mode == "offline":
-        train_offline_jax(config)
-    elif config.backend.type == "torch" and config.backend.mode == "online":
-        train_online_torch(config)
-    else:
-        raise ValueError(
-            f"Unsupported backend/mode combination: {config.backend.type}/{config.backend.mode}. "
-            f"Supported combinations: jax/offline, torch/online"
-        )
+    # Create training run if tracking enabled
+    run = None
+    tracker = None
+    if enable_tracking:
+        project_id = project_id or "default"
+        
+        # Get code revision if available
+        code_revision = None
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=config_path.parent,
+            )
+            if result.returncode == 0:
+                code_revision = result.stdout.strip()
+        except Exception:
+            pass
+        
+        # Create or load run
+        metadata_store = MetadataStore(config.output_dir / "metadata")
+        if run_id:
+            run = metadata_store.load(project_id, run_id)
+            if not run:
+                logger.warning(f"Run {run_id} not found, creating new run")
+                run = None
+        
+        if run is None:
+            dataset_reference = str(config.dataset.path) if config.dataset else None
+            # Convert config to dict
+            config_dict = config.model_dump() if hasattr(config, "model_dump") else (
+                config.dict() if hasattr(config, "dict") else {}
+            )
+            run = TrainingRun.create(
+                project_id=project_id,
+                config=config_dict,
+                code_revision=code_revision,
+                dataset_reference=dataset_reference,
+            )
+            metadata_store.save(run)
+        
+        run.mark_started()
+        metadata_store.update(run)
+        
+        logger.info(f"Training Run ID: {run.run_id}")
+        logger.info(f"Project ID: {run.project_id}")
+        
+        # Initialize eval-to-prod tracker
+        try:
+            tracker = EvalToProdTracker(run)
+        except Exception as e:
+            logger.warning(f"Failed to initialize eval-to-prod tracker: {e}")
+            tracker = None
+    
+    try:
+        # Route to appropriate backend/mode
+        if config.backend.type == "jax" and config.backend.mode == "offline":
+            train_offline_jax(config)
+        elif config.backend.type == "torch" and config.backend.mode == "online":
+            train_online_torch(config)
+        else:
+            raise ValueError(
+                f"Unsupported backend/mode combination: {config.backend.type}/{config.backend.mode}. "
+                f"Supported combinations: jax/offline, torch/online"
+            )
+        
+        # Mark run as completed
+        if run:
+            run.mark_completed()
+            if metadata_store:
+                metadata_store.update(run)
+        
+        if tracker:
+            tracker.finish()
+    
+    except Exception as e:
+        # Mark run as failed
+        if run:
+            run.mark_failed(str(e))
+            if metadata_store:
+                metadata_store.update(run)
+        raise
+    
+    return run
 
 
 def main() -> None:
@@ -187,7 +282,7 @@ def main() -> None:
     CLI entrypoint for `prime-rl train`.
     
     Usage:
-        prime-rl train --mode offline --config path/to/config.toml
+        prime-rl train --mode offline --config path/to/config.toml [--project-id PROJECT] [--run-id RUN] [--no-tracking]
     """
     parser = argparse.ArgumentParser(description="PRIME-RL unified training CLI")
     parser.add_argument(
@@ -202,10 +297,33 @@ def main() -> None:
         required=True,
         help="Path to TOML configuration file",
     )
+    parser.add_argument(
+        "--project-id",
+        type=str,
+        default=None,
+        help="Project identifier for multi-tenancy",
+    )
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        default=None,
+        help="Run identifier (creates new if not provided)",
+    )
+    parser.add_argument(
+        "--no-tracking",
+        action="store_true",
+        help="Disable eval-to-prod tracking",
+    )
     
     args = parser.parse_args()
     
-    train(config_path=args.config, mode=args.mode)
+    train(
+        config_path=args.config,
+        mode=args.mode,
+        project_id=args.project_id,
+        run_id=args.run_id,
+        enable_tracking=not args.no_tracking,
+    )
 
 
 if __name__ == "__main__":

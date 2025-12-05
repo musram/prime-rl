@@ -30,6 +30,10 @@ from prime_rl.core.trainer import (
     LoggingHook,
     Trainer,
 )
+from prime_rl.core.training_run import TrainingRun
+from prime_rl.core.metadata_store import MetadataStore
+from prime_rl.core.sdk import PRIMERLClient
+from prime_rl.core.eval_to_prod import EvalToProdTracker
 from prime_rl.core.verifier import (
     VerifierClient,
     VerifierError,
@@ -65,5 +69,10 @@ __all__ = [
     "FinalOutcome",
     "load_trace_from_jsonl_line",
     "load_traces_from_jsonl",
+    # Training Run & Multi-Tenancy
+    "TrainingRun",
+    "MetadataStore",
+    "PRIMERLClient",
+    "EvalToProdTracker",
 ]
 
