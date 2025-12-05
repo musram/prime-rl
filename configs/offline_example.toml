@@ -6,9 +6,9 @@ type = "jax"
 mode = "offline"
 
 [dataset]
-path = "data/traces.jsonl"
+path = "data/sample_traces.jsonl"
 schema_version = "v1"
-batch_size = 32
+batch_size = 2
 shuffle = true
 
 [algorithm]
@@ -17,12 +17,12 @@ learning_rate = 1e-5
 beta = 0.1  # DPO beta parameter
 
 [model]
-name = "meta-llama/Llama-3.1-8B"
+name = "gpt2"
 trust_remote_code = false
 
 [output]
 output_dir = "./output"
-max_steps = 1000
-checkpoint_every = 100
-eval_every = 200
+max_steps = 10
+checkpoint_every = 5
+eval_every = 10
 

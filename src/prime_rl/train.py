@@ -65,18 +65,12 @@ def train_offline_jax(config: UnifiedConfig) -> None:
     if config.model is None:
         raise ValueError("Model configuration required")
     
-    # Load dataset
-    logger.info(f"Loading dataset from {config.dataset.path}")
-    data_loader = JaxDataLoader(
-        file_path=str(config.dataset.path),
-        batch_size=config.dataset.batch_size,
-        shuffle=config.dataset.shuffle,
-    )
-    
-    # Initialize algorithm
+    # Initialize algorithm (this also initializes tokenizer)
     algorithm_config = {
         "learning_rate": config.algorithm.learning_rate,
         "beta": config.algorithm.beta,
+        "model_name": config.model.name,
+        "trust_remote_code": config.model.trust_remote_code,
     }
     
     if config.algorithm.name == "dpo":
@@ -84,16 +78,31 @@ def train_offline_jax(config: UnifiedConfig) -> None:
     else:
         raise ValueError(f"Unsupported algorithm: {config.algorithm.name}")
     
+    # Load dataset with tokenizer from algorithm
+    logger.info(f"Loading dataset from {config.dataset.path}")
+    data_loader = JaxDataLoader(
+        file_path=str(config.dataset.path),
+        tokenizer=algorithm.tokenizer,
+        batch_size=config.dataset.batch_size,
+        shuffle=config.dataset.shuffle,
+    )
+    
     # Initialize trainer
     trainer_config = {
         "max_steps": config.max_steps,
         "checkpoint_every": config.checkpoint_every,
         "eval_every": config.eval_every,
         "output_dir": str(config.output_dir),
-        "model": config.model.dict() if config.model else None,
+        "model": config.model.dict() if hasattr(config.model, "dict") else (
+            config.model.model_dump() if hasattr(config.model, "model_dump") else {}
+        ),
     }
     
-    trainer = JaxTrainer(algorithm=algorithm, config=trainer_config)
+    trainer = JaxTrainer(
+        algorithm=algorithm,
+        config=trainer_config,
+        data_loader=data_loader,
+    )
     
     # Run training loop
     logger.info("Starting training loop")

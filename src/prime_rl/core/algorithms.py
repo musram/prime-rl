@@ -80,6 +80,16 @@ class TrainingMetrics:
     step: int
     # Backend-specific metrics (e.g. "cuda_memory" for PyTorch, "compilation_time" for JAX)
     framework_specific: Dict[str, Any] = field(default_factory=dict)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert TrainingMetrics to dictionary."""
+        return {
+            "loss": self.loss,
+            "grad_norm": self.grad_norm,
+            "learning_rate": self.learning_rate,
+            "step": self.step,
+            **self.framework_specific,
+        }
 
 
 class RLAlgorithm(ABC, Generic[State, Batch]):
