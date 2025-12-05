@@ -6,7 +6,7 @@ into the Interaction Trace JSONL format.
 """
 
 from abc import ABC, abstractmethod
-from typing import Iterator, List, Optional
+from typing import Any, Iterator, List, Optional
 from pathlib import Path
 
 from prime_rl.core.interaction_trace import InteractionTrace

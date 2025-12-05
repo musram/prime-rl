@@ -21,6 +21,12 @@ from prime_rl.integrations.data_converters import (
     MCPLogConverter,
 )
 
+# Enterprise integrations
+from prime_rl.integrations.enterprise import EpicAdapter, SlackAdapter
+
+# Marketplace integrations
+from prime_rl.integrations.marketplace import SurgeAIClient, MercorClient
+
 __all__ = [
     "HttpVerifierClient",
     "GrpcVerifierClient",
@@ -32,5 +38,11 @@ __all__ = [
     "DataConverter",
     "SalesforceLogConverter",
     "MCPLogConverter",
+    # Enterprise integrations
+    "EpicAdapter",
+    "SlackAdapter",
+    # Marketplace integrations
+    "SurgeAIClient",
+    "MercorClient",
 ]
 
