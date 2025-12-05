@@ -1,0 +1,28 @@
+# Example configuration for offline RL training with JAX backend
+# This follows the unified configuration schema from the PRD (§3.1)
+
+[backend]
+type = "jax"
+mode = "offline"
+
+[dataset]
+path = "data/traces.jsonl"
+schema_version = "v1"
+batch_size = 32
+shuffle = true
+
+[algorithm]
+name = "dpo"
+learning_rate = 1e-5
+beta = 0.1  # DPO beta parameter
+
+[model]
+name = "meta-llama/Llama-3.1-8B"
+trust_remote_code = false
+
+[output]
+output_dir = "./output"
+max_steps = 1000
+checkpoint_every = 100
+eval_every = 200
+
