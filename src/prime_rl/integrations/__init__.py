@@ -11,6 +11,10 @@ from prime_rl.integrations.remote.grpc_verifier import GrpcVerifierClient
 from prime_rl.integrations.browser_gym.adapter import BrowserGymAdapter
 from prime_rl.integrations.langgraph.adapter import LangGraphAdapter
 from prime_rl.integrations.mcp.adapter import MCPAdapter
+from prime_rl.integrations.prime_intellect import (
+    PrimeIntellectEnvAdapter,
+    PrimeIntellectVerifierClient,
+)
 from prime_rl.integrations.data_converters import (
     DataConverter,
     SalesforceLogConverter,
@@ -23,6 +27,8 @@ __all__ = [
     "BrowserGymAdapter",
     "LangGraphAdapter",
     "MCPAdapter",
+    "PrimeIntellectEnvAdapter",
+    "PrimeIntellectVerifierClient",
     "DataConverter",
     "SalesforceLogConverter",
     "MCPLogConverter",
