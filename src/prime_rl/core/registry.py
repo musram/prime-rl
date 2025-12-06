@@ -129,3 +129,24 @@ try:
 except ImportError:
     pass
 
+# Auto-register sandboxes
+try:
+    from prime_rl.sandboxes.crm.adapter import CRMSupportSandbox
+    from prime_rl.sandboxes.crm.verifier import CRMSupportRubricVerifier
+    from prime_rl.sandboxes.finance.adapter import FinanceReconciliationSandbox
+    from prime_rl.sandboxes.finance.verifier import FinanceReconciliationRubricVerifier
+    
+    register_environment_adapter("crm_support", CRMSupportSandbox)
+    register_verifier_client("crm_rubric", CRMSupportRubricVerifier)
+    register_environment_adapter("finance_reconciliation", FinanceReconciliationSandbox)
+    register_verifier_client("finance_rubric", FinanceReconciliationRubricVerifier)
+except ImportError:
+    pass
+
+# Auto-register replication components
+try:
+    from prime_rl.integrations.replication.pytest_verifier import PytestVerifierClient
+    register_verifier_client("pytest", PytestVerifierClient)
+except ImportError:
+    pass
+

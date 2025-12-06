@@ -1,0 +1,31 @@
+# Training Configuration with World Model Environment
+# Uses a trained world model as the environment instead of real CRM sandbox
+
+[backend]
+type = "torch"
+mode = "online"
+
+[algorithm]
+name = "grpo"
+learning_rate = 1e-5
+clip_epsilon = 0.2
+value_coef = 0.5
+entropy_coef = 0.01
+
+[model]
+name = "meta-llama/Llama-3.1-8B-Instruct"
+trust_remote_code = false
+
+# Use world model as environment
+[world_model]
+algorithm = "crm_mlp"
+state_representation = "crm_structured"
+checkpoint_path = "outputs/world_models/crm_mlp/checkpoint_best"
+algorithm_config = {}
+
+[output]
+output_dir = "outputs/train_with_world_model"
+max_steps = 1000
+checkpoint_every = 100
+eval_every = 50
+

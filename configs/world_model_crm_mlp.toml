@@ -1,0 +1,15 @@
+# World Model Training Configuration - CRM MLP
+# Trains a simple MLP world model for CRM sandbox
+
+[world_model]
+algorithm = "crm_mlp"
+state_representation = "crm_structured"
+algorithm_config = { hidden_dim = 256, learning_rate = 0.001 }
+
+[training]
+data_path = "data/crm_traces.jsonl"
+output_dir = "outputs/world_models/crm_mlp"
+num_epochs = 20
+batch_size = 32
+validation_split = 0.1
+

@@ -61,6 +61,14 @@ class OutputConfig(BaseModel):
     eval_every: Optional[int] = Field(default=None, ge=1, description="Evaluate every N steps")
 
 
+class WorldModelConfigSection(BaseModel):
+    """World model configuration section."""
+    algorithm: str = Field(..., description="World model algorithm name (e.g., 'crm_mlp', 'text_transformer')")
+    state_representation: str = Field(..., description="State representation type (e.g., 'crm_structured', 'text')")
+    checkpoint_path: Optional[Path] = Field(default=None, description="Path to world model checkpoint")
+    algorithm_config: Dict[str, Any] = Field(default_factory=dict, description="Algorithm-specific configuration")
+
+
 class UnifiedConfig(BaseModel):
     """
     Unified configuration schema for PRIME-RL.
@@ -74,6 +82,7 @@ class UnifiedConfig(BaseModel):
     model: Optional[ModelConfig] = Field(default=None, description="Model config")
     training: Optional[TrainingConfig] = Field(default=None, description="Training config (for JAX backend)")
     output: Optional[OutputConfig] = Field(default=None, description="Output configuration")
+    world_model: Optional[WorldModelConfigSection] = Field(default=None, description="World model configuration")
     
     # Convenience properties for backward compatibility
     @property

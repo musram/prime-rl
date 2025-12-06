@@ -1,0 +1,33 @@
+# Replication Training Configuration - Project A
+# Example configuration for Mechanize-style replication training
+
+[backend]
+type = "torch"
+mode = "online"
+
+[algorithm]
+name = "grpo"
+learning_rate = 1e-5
+clip_epsilon = 0.2
+value_coef = 0.5
+entropy_coef = 0.01
+
+[model]
+name = "meta-llama/Llama-3.1-8B-Instruct"
+trust_remote_code = false
+
+[environment]
+type = "python_repo"
+repo_path = "benchmarks/replication/project_a"
+
+[verifier]
+type = "pytest"
+command = "pytest -q"
+timeout = 60
+
+[output]
+output_dir = "outputs/replication_project_a"
+max_steps = 500
+checkpoint_every = 50
+eval_every = 25
+

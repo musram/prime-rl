@@ -1,0 +1,33 @@
+# Finance Reconciliation Sandbox Configuration
+# Example configuration for training on financial reconciliation workflows
+
+[backend]
+type = "torch"
+mode = "online"
+
+[algorithm]
+name = "grpo"
+learning_rate = 1e-5
+clip_epsilon = 0.2
+value_coef = 0.5
+entropy_coef = 0.01
+
+[model]
+name = "meta-llama/Llama-3.1-8B-Instruct"
+trust_remote_code = false
+
+[environment]
+type = "finance_reconciliation"
+num_accounts = 5
+num_transactions = 20
+num_ledger_entries = 18
+
+[verifier]
+type = "finance_rubric"
+
+[output]
+output_dir = "outputs/finance_reconciliation_sandbox"
+max_steps = 1000
+checkpoint_every = 100
+eval_every = 50
+
